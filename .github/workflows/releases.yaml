@@ -68,11 +68,10 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
         with:
-          node-version: 20
-          cache: "npm"  # Ganti ke 'pnpm' atau 'yarn' jika pakai itu
+          bun-version: latest  # atau spesifik: '1.1.43'
 
       - name: Install Rust stable
         uses: dtolnay/rust-toolchain@stable
@@ -80,7 +79,7 @@ jobs:
           targets: x86_64-pc-windows-msvc
 
       - name: Install frontend dependencies
-        run: npm ci  # atau: pnpm install / yarn install
+        run: bun ci
 
       - name: Build Tauri App
         id: tauri_build
@@ -137,17 +136,16 @@ jobs:
             patchelf \
             rpm
 
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
         with:
-          node-version: 20
-          cache: "npm"
+          bun-version: latest  # atau spesifik: '1.1.43'
 
       - name: Install Rust stable
         uses: dtolnay/rust-toolchain@stable
 
       - name: Install frontend dependencies
-        run: npm ci
+        run: bun ci
 
       - name: Build Tauri App
         uses: tauri-apps/tauri-action@v0
