@@ -3,16 +3,16 @@ name: "Release Tauri App"
 on:
   push:
     tags:
-      - "v*"  # Trigger saat push tag v1.0.0, v2.0.0-beta, dll
-  workflow_dispatch:  # Bisa trigger manual
+      - "v*"
+  workflow_dispatch:
 
-# Permission untuk auto-create release
 permissions:
   contents: write
+  packages: write
 
 jobs:
   # ========================================
-  # Generate Changelog (jalan sekali di awal)
+  # Generate Changelog
   # ========================================
   changelog:
     name: Generate Changelog
@@ -43,6 +43,7 @@ jobs:
           else
             echo "## 🎉 Initial Release" > CHANGES.md
             echo "" >> CHANGES.md
+            echo "### 📝 Commits" >> CHANGES.md
             git log --pretty=format:"- %s (%h) by @%an" >> CHANGES.md
           fi
 
@@ -71,25 +72,29 @@ jobs:
       - name: Setup Bun
         uses: oven-sh/setup-bun@v2
         with:
-          bun-version: latest  # atau spesifik: '1.1.43'
+          bun-version: latest
 
       - name: Install Rust stable
         uses: dtolnay/rust-toolchain@stable
         with:
           targets: x86_64-pc-windows-msvc
 
+      - name: Rust cache
+        uses: swatinem/rust-cache@v2
+        with:
+          workspaces: "./src-tauri -> target"
+
       - name: Install frontend dependencies
         run: bun ci
 
       - name: Build Tauri App
-        id: tauri_build
         uses: tauri-apps/tauri-action@v0
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }} # ✅ PERBAIKAN 1: Gunakan secrets
         with:
           tagName: ${{ github.ref_name }}
           releaseName: "v${{ needs.changelog.outputs.version }}"
-          releaseBody: |
+          releaseBody: | # ✅ PERBAIKAN 2: Body identik dengan Linux agar tidak saling timpa
             ${{ needs.changelog.outputs.changelog }}
             
             ## 📥 Downloads
@@ -100,15 +105,6 @@ jobs:
           releaseDraft: false
           prerelease: ${{ contains(github.ref_name, '-') }}
           args: --bundles ${{ matrix.config }}
-
-      # Upload artifact agar bisa didownload terpisah
-      - name: Upload artifacts
-        uses: actions/upload-artifact@v4
-        with:
-          name: windows-${{ matrix.config }}
-          path: |
-            src-tauri/target/release/bundle/nsis/*.exe
-            src-tauri/target/release/bundle/msi/*.msi
 
   # ========================================
   # Build untuk Linux
@@ -139,10 +135,15 @@ jobs:
       - name: Setup Bun
         uses: oven-sh/setup-bun@v2
         with:
-          bun-version: latest  # atau spesifik: '1.1.43'
+          bun-version: latest
 
       - name: Install Rust stable
         uses: dtolnay/rust-toolchain@stable
+
+      - name: Rust cache
+        uses: swatinem/rust-cache@v2
+        with:
+          workspaces: "./src-tauri -> target"
 
       - name: Install frontend dependencies
         run: bun ci
@@ -150,23 +151,21 @@ jobs:
       - name: Build Tauri App
         uses: tauri-apps/tauri-action@v0
         env:
-          GITHUB_TOKEN: ${{ github.token }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }} # ✅ PERBAIKAN 1: Gunakan secrets (bukan github.token)
         with:
           tagName: ${{ github.ref_name }}
           releaseName: "v${{ needs.changelog.outputs.version }}"
-          releaseBody: |
+          releaseBody: | # ✅ PERBAIKAN 2: Body identik dengan Windows
             ${{ needs.changelog.outputs.changelog }}
+            
+            ## 📥 Downloads
+            - **Windows (.exe)**: Installer NSIS (rekomendasi)
+            - **Windows (.msi)**: Windows Installer
+            - **Linux (.deb)**: Debian/Ubuntu
+            - **Linux (.rpm)**: Fedora/RHEL/openSUSE
           releaseDraft: false
           prerelease: ${{ contains(github.ref_name, '-') }}
           args: --bundles ${{ matrix.config }}
-
-      - name: Upload artifacts
-        uses: actions/upload-artifact@v4
-        with:
-          name: linux-${{ matrix.config }}
-          path: |
-            src-tauri/target/release/bundle/deb/*.deb
-            src-tauri/target/release/bundle/rpm/*.rpm
 
   # ========================================
   # Build untuk macOS (opsional, uncomment jika perlu)
