@@ -23,19 +23,31 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          fetch-depth: 0  # Perlu semua history untuk changelog
+          fetch-depth: 0
 
       - name: Get version from tag
         id: get_version
         run: echo "version=${GITHUB_REF#refs/tags/v}" >> $GITHUB_OUTPUT
 
+      # Generate changelog dengan git-cliff
       - name: Generate changelog
         id: changelog
-        uses: requarks/changelog-action@v1
+        uses: orhunp/git-cliff-action@v3
         with:
-          token: ${{ github.token }}
-          tag: ${{ github.ref_name }}
-          writeToFile: false
+          args: --latest --strip header
+        env:
+          OUTPUT: CHANGES.md
+
+      - name: Read changelog
+        id: read_changelog
+        run: |
+          if [ -f CHANGES.md ]; then
+            echo "content<<EOF" >> $GITHUB_OUTPUT
+            cat CHANGES.md >> $GITHUB_OUTPUT
+            echo "EOF" >> $GITHUB_OUTPUT
+          else
+            echo "content=Initial release 🎉" >> $GITHUB_OUTPUT
+          fi
 
   # ========================================
   # Build untuk Windows
