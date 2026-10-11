@@ -1,0 +1,38 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="icon" type="image/svg+xml" href="/vite.svg" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Podman Desk</title>
+    <script>
+      (function () {
+        try {
+          var stored = localStorage.getItem("podman-desk-color-mode");
+          var prefersDark = window.matchMedia(
+            "(prefers-color-scheme: dark)",
+          ).matches;
+          var dark =
+            stored === "dark" ||
+            ((stored === null || stored === "auto") && prefersDark);
+          document.documentElement.classList.toggle("dark", dark);
+        } catch (e) {
+          /* localStorage tidak tersedia: pakai preferensi sistem */
+        }
+      })();
+    </script>
+    <style>
+      html {
+        background-color: #fafafa;
+      }
+      html.dark {
+        background-color: #09090b;
+      }
+    </style>
+  </head>
+
+  <body>
+    <div id="app"></div>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>
