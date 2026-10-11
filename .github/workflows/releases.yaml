@@ -21,7 +21,7 @@ jobs:
       changelog: ${{ steps.changelog.outputs.content }}
       version: ${{ steps.get_version.outputs.version }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: git-cliff/action@v3
         with:
           fetch-depth: 0
 
