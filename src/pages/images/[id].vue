@@ -1,16 +1,20 @@
 <script setup lang="ts">
 import { computed, ref, watch } from "vue";
-import { useRoute } from "vue-router";
+import { useRoute, useRouter } from "vue-router";
 import { invoke } from "@tauri-apps/api/core";
 import { useAsyncState } from "@vueuse/core";
 import PageHeader from "@components/PageHeader.vue";
 import EmptyState from "@components/EmptyState.vue";
 import FsTreeNode from "@components/FsTreeNode.vue";
+import ConfirmDialog from "@components/ConfirmDialog.vue";
+import RunImageDialog from "@components/RunImageDialog.vue";
+import { Button } from "@/components/ui/button";
 import { useFormat } from "@/composables/useFormat";
 import { useLiveRefresh } from "@/composables/usePodmanEvents";
 import type { FsNode, ImageFs, ImageHistoryItem, ImageInspect } from "@/types/images";
 
 const route = useRoute("/images/[id]");
+const router = useRouter();
 const id = computed(() => String(route.params.id));
 
 const { formatDate, formatAge, formatSize, shortId } = useFormat();
@@ -132,6 +136,35 @@ const layerCommand = (createdBy: string | undefined) => {
   if (!createdBy) return "—";
   return createdBy.replace(/^\/bin\/sh\s+-c\s+#\s*\(\s*nop\s*\)\s*/i, "").trim() || createdBy;
 };
+
+const fullRef = computed(() => {
+  const tag = image.value?.RepoTags?.find((item) => item && !item.startsWith("<none>"));
+  return tag ?? id.value;
+});
+
+const runOpen = ref(false);
+const deleteOpen = ref(false);
+const deleteLoading = ref(false);
+const deleteError = ref<string | undefined>(undefined);
+
+const openDelete = () => {
+  deleteError.value = undefined;
+  deleteOpen.value = true;
+};
+
+const confirmDelete = async () => {
+  deleteLoading.value = true;
+  deleteError.value = undefined;
+  try {
+    await invoke("remove_image", { id: id.value, force: true });
+    deleteOpen.value = false;
+    await router.push("/images");
+  } catch (e) {
+    deleteError.value = String(e);
+  } finally {
+    deleteLoading.value = false;
+  }
+};
 </script>
 
 <template>
@@ -143,8 +176,25 @@ const layerCommand = (createdBy: string | undefined) => {
       ← Images
     </RouterLink>
 
-    <div class="mt-3">
+    <div class="mt-3 flex flex-wrap items-start justify-between gap-3">
       <PageHeader :title="title" :description="shortId(id)" />
+      <div class="flex flex-wrap items-center gap-1">
+        <Button
+          size="sm"
+          variant="outline"
+          @click="runOpen = true"
+        >
+          Run
+        </Button>
+        <Button
+          size="sm"
+          variant="outline"
+          class="text-rose-600 hover:text-rose-700 dark:text-rose-400 dark:hover:text-rose-300"
+          @click="openDelete"
+        >
+          Delete
+        </Button>
+      </div>
     </div>
 
     <div
@@ -477,5 +527,27 @@ const layerCommand = (createdBy: string | undefined) => {
         </section>
       </div>
     </template>
+
+    <RunImageDialog
+      v-if="image"
+      v-model:open="runOpen"
+      :image-ref="fullRef"
+      @started="
+        () => {
+          runOpen = false;
+          router.push('/containers');
+        }
+      "
+    />
+
+    <ConfirmDialog
+      v-model:open="deleteOpen"
+      title="Delete image?"
+      :description="`Image ${fullRef} will be permanently removed.`"
+      confirm-label="Delete"
+      :loading="deleteLoading"
+      :error="deleteError"
+      @confirm="confirmDelete"
+    />
   </div>
 </template>

@@ -1,7 +1,12 @@
 <script setup lang="ts">
+import { computed, ref } from "vue";
 import PageHeader from "@components/PageHeader.vue";
 import DataTable from "@components/DataTable.vue";
 import type { DataTableColumn } from "@components/DataTable.vue";
+import ConfirmDialog from "@components/ConfirmDialog.vue";
+import RowActions from "@components/RowActions.vue";
+import type { RowAction } from "@components/RowActions.vue";
+import BulkActionsBar from "@components/BulkActionsBar.vue";
 import { useAsyncState } from "@vueuse/core";
 import { invoke } from "@tauri-apps/api/core";
 import { useFormat } from "@/composables/useFormat";
@@ -33,6 +38,89 @@ const columns: DataTableColumn<NetworkSummary>[] = [
     header: "Created",
     accessorFn: (network) => network.Created,
   },
+  { id: "actions", header: "", accessorFn: () => "" },
+];
+
+const deleteOpen = ref(false);
+const deleteTarget = ref<NetworkSummary | null>(null);
+const deleteLoading = ref(false);
+const deleteError = ref<string | undefined>(undefined);
+
+const openDelete = (network: NetworkSummary) => {
+  bulkDelete.value = false;
+  deleteTarget.value = network;
+  deleteError.value = undefined;
+  deleteOpen.value = true;
+};
+
+const selected = ref<string[]>([]);
+
+const selectedRows = computed(() => {
+  const ids = new Set(selected.value);
+  return (networks.value ?? []).filter((network, index) =>
+    ids.has(network.Id ?? network.Name ?? String(index)),
+  );
+});
+
+const bulkDelete = ref(false);
+
+const openBulkDelete = () => {
+  deleteTarget.value = null;
+  deleteError.value = undefined;
+  bulkDelete.value = true;
+  deleteOpen.value = true;
+};
+
+const deleteDescription = computed(() => {
+  if (bulkDelete.value) {
+    return `${selectedRows.value.length} networks will be permanently removed.`;
+  }
+  if (deleteTarget.value) {
+    return `Network ${deleteTarget.value.Name ?? shortId(deleteTarget.value.Id ?? "")} will be permanently removed.`;
+  }
+  return undefined;
+});
+
+const bulkItems = computed<RowAction[]>(() =>
+  selectedRows.value.length
+    ? [
+        {
+          label: "Delete",
+          danger: true,
+          onSelect: openBulkDelete,
+        },
+      ]
+    : [],
+);
+
+const confirmDelete = async () => {
+  const rows: NetworkSummary[] = bulkDelete.value
+    ? selectedRows.value
+    : deleteTarget.value
+      ? [deleteTarget.value]
+      : [];
+  if (!rows.length) return;
+  deleteLoading.value = true;
+  deleteError.value = undefined;
+  try {
+    for (const row of rows) {
+      if (!row.Name) continue;
+      await invoke("remove_network", { name: row.Name });
+    }
+    deleteOpen.value = false;
+    deleteTarget.value = null;
+    bulkDelete.value = false;
+    selected.value = [];
+    await execute();
+  } catch (e) {
+    deleteError.value = String(e);
+  } finally {
+    deleteLoading.value = false;
+  }
+};
+
+const rowActions = (network: NetworkSummary): RowAction[] => [
+  { label: "Delete", danger: true, onSelect: () => openDelete(network) },
 ];
 </script>
 
@@ -43,7 +131,16 @@ const columns: DataTableColumn<NetworkSummary>[] = [
       description="Networks for containers to communicate over."
     />
 
+    <BulkActionsBar
+      :count="selected.length"
+      :actions="bulkItems"
+      noun="networks selected"
+      @clear="selected = []"
+    />
+
     <DataTable
+      v-model:selected="selected"
+      :selectable="true"
       :columns="columns"
       :data="networks ?? []"
       :row-id="
@@ -90,6 +187,22 @@ const columns: DataTableColumn<NetworkSummary>[] = [
           {{ formatAge(row.Created) }}
         </span>
       </template>
+      <template #cell-actions="{ row }">
+        <div class="flex items-center justify-end">
+          <RowActions :items="rowActions(row)" />
+        </div>
+      </template>
     </DataTable>
+
+    <ConfirmDialog
+      v-if="deleteTarget || bulkDelete"
+      v-model:open="deleteOpen"
+      title="Delete network?"
+      :description="deleteDescription"
+      confirm-label="Delete"
+      :loading="deleteLoading"
+      :error="deleteError"
+      @confirm="confirmDelete"
+    />
   </div>
 </template>

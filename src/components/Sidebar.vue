@@ -146,9 +146,9 @@ const statusDot = computed(
 
 <template>
   <aside
-    class="flex h-full w-60 shrink-0 select-none flex-col border-r border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-900"
+    class="flex h-full w-60 shrink-0 select-none flex-col border-r border-zinc-200 bg-white max-lg:w-16 dark:border-zinc-800 dark:bg-zinc-900"
   >
-    <div class="flex items-center gap-2.5 border-b border-zinc-200 px-4 py-3.5 dark:border-zinc-800">
+    <div class="flex items-center gap-2.5 border-b border-zinc-200 px-4 py-3.5 max-lg:justify-center max-lg:px-0 dark:border-zinc-800">
       <span
         class="flex h-8 w-8 items-center justify-center rounded-lg bg-sky-500/10 text-sky-500"
         aria-hidden="true"
@@ -169,7 +169,7 @@ const statusDot = computed(
           <path d="M12 22V12" />
         </svg>
       </span>
-      <RouterLink to="/" class="min-w-0 leading-tight">
+      <RouterLink to="/" class="min-w-0 leading-tight max-lg:hidden" :title="title">
         <span class="block truncate text-sm font-semibold text-zinc-900 dark:text-zinc-50">
           {{ title }}
         </span>
@@ -182,7 +182,7 @@ const statusDot = computed(
     <nav class="flex-1 space-y-6 overflow-y-auto px-3 py-4" aria-label="Main">
       <section v-for="group in groups" :key="group.label">
         <h2
-          class="px-3 pb-1 text-[11px] font-medium uppercase tracking-wider text-zinc-400 dark:text-zinc-500"
+          class="px-3 pb-1 text-[11px] font-medium uppercase tracking-wider text-zinc-400 max-lg:hidden dark:text-zinc-500"
         >
           {{ group.label }}
         </h2>
@@ -190,7 +190,8 @@ const statusDot = computed(
           <li v-for="item in group.children" :key="item.to">
             <RouterLink
               :to="item.to"
-              class="relative flex w-full items-center gap-3 rounded-md px-3 py-2 text-sm transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-sky-500"
+              class="relative flex w-full items-center gap-3 rounded-md px-3 py-2 text-sm transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-sky-500 max-lg:justify-center max-lg:px-0"
+              :title="item.label"
               :class="
                 isActive(item.to)
                   ? 'bg-zinc-100 font-medium text-zinc-900 before:absolute before:left-0 before:top-1/2 before:h-4 before:w-0.5 before:-translate-y-1/2 before:rounded-full before:bg-sky-500 dark:bg-zinc-800 dark:text-zinc-50'
@@ -209,10 +210,10 @@ const statusDot = computed(
               >
                 <path v-for="(d, i) in item.icon" :key="i" :d="d" />
               </svg>
-              <span class="min-w-0 flex-1 truncate">{{ item.label }}</span>
+              <span class="min-w-0 flex-1 truncate max-lg:hidden">{{ item.label }}</span>
               <span
                 v-if="item.badge"
-                class="rounded-full bg-zinc-200 px-1.5 py-0.5 text-[11px] font-medium tabular-nums text-zinc-600 dark:bg-zinc-700 dark:text-zinc-300"
+                class="rounded-full bg-zinc-200 px-1.5 py-0.5 text-[11px] font-medium tabular-nums text-zinc-600 max-lg:hidden dark:bg-zinc-700 dark:text-zinc-300"
               >
                 {{ item.badge }}
               </span>
@@ -222,11 +223,11 @@ const statusDot = computed(
       </section>
     </nav>
 
-    <div class="space-y-1.5 border-t border-zinc-200 px-4 py-3 dark:border-zinc-800">
+    <div class="space-y-1.5 border-t border-zinc-200 px-4 py-3 max-lg:px-3 dark:border-zinc-800">
       <p
         v-if="event"
-        class="flex items-center gap-2 text-xs text-zinc-500 dark:text-zinc-400"
-        title="Perubahan terakhir yang diterima dari Podman"
+        class="flex items-center gap-2 text-xs text-zinc-500 max-lg:justify-center dark:text-zinc-400"
+        :title="event"
       >
         <svg
           class="h-3.5 w-3.5 shrink-0 text-emerald-500"
@@ -240,18 +241,18 @@ const statusDot = computed(
         >
           <path d="M3 12h4l3-9 4 18 3-9h4" />
         </svg>
-        <span class="truncate">{{ event }}</span>
+        <span class="truncate max-lg:hidden">{{ event }}</span>
       </p>
       <p
-        class="flex items-center gap-2 text-xs text-zinc-500 dark:text-zinc-400"
-        :title="detail"
+        class="flex items-center gap-2 text-xs text-zinc-500 max-lg:justify-center dark:text-zinc-400"
+        :title="detail ?? statusText"
       >
         <span class="h-2 w-2 shrink-0 rounded-full" :class="statusDot" aria-hidden="true" />
-        <span class="truncate">{{ statusText }}</span>
+        <span class="truncate max-lg:hidden">{{ statusText }}</span>
       </p>
-      <div class="flex items-center justify-between gap-2 pt-1">
+      <div class="flex items-center justify-between gap-2 pt-1 max-lg:justify-center max-lg:pt-0">
         <span
-          class="text-[11px] font-medium uppercase tracking-wider text-zinc-400 dark:text-zinc-500"
+          class="text-[11px] font-medium uppercase tracking-wider text-zinc-400 max-lg:hidden dark:text-zinc-500"
         >
           Theme
         </span>

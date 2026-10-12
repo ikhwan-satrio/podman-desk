@@ -1,15 +1,20 @@
 <script setup lang="ts">
 import { computed, ref, watch } from "vue";
-import { useRoute } from "vue-router";
+import { useRoute, useRouter } from "vue-router";
 import { invoke } from "@tauri-apps/api/core";
 import { useAsyncState } from "@vueuse/core";
 import PageHeader from "@components/PageHeader.vue";
 import EmptyState from "@components/EmptyState.vue";
+import ConfirmDialog from "@components/ConfirmDialog.vue";
+import RenameContainerDialog from "@components/RenameContainerDialog.vue";
+import { Button } from "@/components/ui/button";
 import { useFormat } from "@/composables/useFormat";
 import { useLiveRefresh } from "@/composables/usePodmanEvents";
+import { useAction } from "@/composables/useAction";
 import type { ContainerInspect, ContainerPort } from "@/types/containers";
 
 const route = useRoute("/containers/[id]");
+const router = useRouter();
 const id = computed(() => String(route.params.id));
 
 const { formatDate, formatAge, shortId } = useFormat();
@@ -147,6 +152,51 @@ const labels = computed(() => {
   if (!map) return [];
   return Object.entries(map);
 });
+
+const { busy, error: actionError, run } = useAction();
+
+const isRunning = computed(() => container.value?.State?.Running === true);
+
+const toggleContainer = () =>
+  run("toggle", async () => {
+    if (isRunning.value) {
+      await invoke("stop_container", { id: id.value });
+    } else {
+      await invoke("start_container", { id: id.value });
+    }
+    await execute();
+  });
+
+const restartContainer = () =>
+  run("restart", async () => {
+    await invoke("restart_container", { id: id.value });
+    await execute();
+  });
+
+const renameOpen = ref(false);
+
+const deleteOpen = ref(false);
+const deleteLoading = ref(false);
+const deleteError = ref<string | undefined>(undefined);
+
+const openDelete = () => {
+  deleteError.value = undefined;
+  deleteOpen.value = true;
+};
+
+const confirmDelete = async () => {
+  deleteLoading.value = true;
+  deleteError.value = undefined;
+  try {
+    await invoke("remove_container", { id: id.value, force: true });
+    deleteOpen.value = false;
+    await router.push("/containers");
+  } catch (e) {
+    deleteError.value = String(e);
+  } finally {
+    deleteLoading.value = false;
+  }
+};
 </script>
 
 <template>
@@ -160,15 +210,59 @@ const labels = computed(() => {
 
     <div class="mt-3 flex flex-wrap items-start justify-between gap-3">
       <PageHeader :title="name" :description="shortId(id)" />
-      <span
-        v-if="container?.State?.Status"
-        class="mt-2 inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-medium"
-        :class="stateClass"
-      >
-        <span class="h-1.5 w-1.5 rounded-full bg-current" aria-hidden="true" />
-        {{ container.State.Status }}
-      </span>
+      <div class="flex flex-wrap items-center justify-end gap-2">
+        <span
+          v-if="container?.State?.Status"
+          class="inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-medium"
+          :class="stateClass"
+        >
+          <span class="h-1.5 w-1.5 rounded-full bg-current" aria-hidden="true" />
+          {{ container.State.Status }}
+        </span>
+        <div class="flex flex-wrap items-center gap-1">
+          <Button
+            size="sm"
+            variant="outline"
+            :disabled="busy !== null"
+            @click="toggleContainer"
+          >
+            {{ isRunning ? "Stop" : "Start" }}
+          </Button>
+          <Button
+            size="sm"
+            variant="outline"
+            :disabled="busy !== null || !isRunning"
+            @click="restartContainer"
+          >
+            Restart
+          </Button>
+          <Button
+            size="sm"
+            variant="outline"
+            :disabled="busy !== null"
+            @click="renameOpen = true"
+          >
+            Edit
+          </Button>
+          <Button
+            size="sm"
+            variant="outline"
+            class="text-rose-600 hover:text-rose-700 dark:text-rose-400 dark:hover:text-rose-300"
+            :disabled="busy !== null"
+            @click="openDelete"
+          >
+            Delete
+          </Button>
+        </div>
+      </div>
     </div>
+
+    <p
+      v-if="actionError"
+      class="mt-4 rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-xs text-rose-700 dark:border-rose-900 dark:bg-rose-950 dark:text-rose-300"
+    >
+      {{ actionError }}
+    </p>
 
     <div
       v-if="!isReady && !error"
@@ -475,5 +569,23 @@ const labels = computed(() => {
         </div>
       </div>
     </template>
+
+    <RenameContainerDialog
+      v-if="container"
+      v-model:open="renameOpen"
+      :container-id="id"
+      :initial-name="name"
+      @renamed="execute()"
+    />
+
+    <ConfirmDialog
+      v-model:open="deleteOpen"
+      title="Delete container?"
+      :description="`Container ${name} will be permanently removed.`"
+      confirm-label="Delete"
+      :loading="deleteLoading"
+      :error="deleteError"
+      @confirm="confirmDelete"
+    />
   </div>
 </template>

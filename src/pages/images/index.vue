@@ -1,7 +1,13 @@
 <script setup lang="ts">
+import { computed, ref } from "vue";
 import PageHeader from "@components/PageHeader.vue";
 import DataTable from "@components/DataTable.vue";
 import type { DataTableColumn } from "@components/DataTable.vue";
+import ConfirmDialog from "@components/ConfirmDialog.vue";
+import RunImageDialog from "@components/RunImageDialog.vue";
+import RowActions from "@components/RowActions.vue";
+import type { RowAction } from "@components/RowActions.vue";
+import BulkActionsBar from "@components/BulkActionsBar.vue";
 import { invoke } from "@tauri-apps/api/core";
 import { useAsyncState } from "@vueuse/core";
 import { useFormat } from "@/composables/useFormat";
@@ -46,6 +52,95 @@ const columns: DataTableColumn<ImageSummary>[] = [
   { id: "id", header: "Image ID", accessorFn: (image) => shortId(image.Id) },
   { id: "created", header: "Created", accessorFn: (image) => image.Created },
   { id: "size", header: "Size", accessorFn: (image) => formatSize(image.Size) },
+  { id: "actions", header: "", accessorFn: () => "" },
+];
+
+const runOpen = ref(false);
+const runTarget = ref<ImageSummary | null>(null);
+
+const openRun = (image: ImageSummary) => {
+  runTarget.value = image;
+  runOpen.value = true;
+};
+
+const deleteOpen = ref(false);
+const deleteTarget = ref<ImageSummary | null>(null);
+const deleteLoading = ref(false);
+const deleteError = ref<string | undefined>(undefined);
+
+const openDelete = (image: ImageSummary) => {
+  bulkDelete.value = false;
+  deleteTarget.value = image;
+  deleteError.value = undefined;
+  deleteOpen.value = true;
+};
+
+const selected = ref<string[]>([]);
+
+const selectedRows = computed(() => {
+  const ids = new Set(selected.value);
+  return (images.value ?? []).filter((image) => ids.has(image.Id));
+});
+
+const bulkDelete = ref(false);
+
+const openBulkDelete = () => {
+  deleteTarget.value = null;
+  deleteError.value = undefined;
+  bulkDelete.value = true;
+  deleteOpen.value = true;
+};
+
+const deleteDescription = computed(() => {
+  if (bulkDelete.value) {
+    return `${selectedRows.value.length} images will be permanently removed.`;
+  }
+  if (deleteTarget.value) {
+    return `Image ${imageRef(deleteTarget.value) ?? shortId(deleteTarget.value.Id)} will be permanently removed.`;
+  }
+  return undefined;
+});
+
+const bulkItems = computed<RowAction[]>(() =>
+  selectedRows.value.length
+    ? [
+        {
+          label: "Delete",
+          danger: true,
+          onSelect: openBulkDelete,
+        },
+      ]
+    : [],
+);
+
+const confirmDelete = async () => {
+  const rows: ImageSummary[] = bulkDelete.value
+    ? selectedRows.value
+    : deleteTarget.value
+      ? [deleteTarget.value]
+      : [];
+  if (!rows.length) return;
+  deleteLoading.value = true;
+  deleteError.value = undefined;
+  try {
+    for (const row of rows) {
+      await invoke("remove_image", { id: row.Id, force: true });
+    }
+    deleteOpen.value = false;
+    deleteTarget.value = null;
+    bulkDelete.value = false;
+    selected.value = [];
+    await execute();
+  } catch (e) {
+    deleteError.value = String(e);
+  } finally {
+    deleteLoading.value = false;
+  }
+};
+
+const rowActions = (image: ImageSummary): RowAction[] => [
+  { label: "Run", onSelect: () => openRun(image) },
+  { label: "Delete", danger: true, separatorBefore: true, onSelect: () => openDelete(image) },
 ];
 </script>
 
@@ -56,7 +151,16 @@ const columns: DataTableColumn<ImageSummary>[] = [
       description="Local container images available to Podman."
     />
 
+    <BulkActionsBar
+      :count="selected.length"
+      :actions="bulkItems"
+      noun="images selected"
+      @clear="selected = []"
+    />
+
     <DataTable
+      v-model:selected="selected"
+      :selectable="true"
       :columns="columns"
       :data="images ?? []"
       :row-id="(image: ImageSummary) => image.Id"
@@ -108,6 +212,29 @@ const columns: DataTableColumn<ImageSummary>[] = [
           value
         }}</span>
       </template>
+      <template #cell-actions="{ row }">
+        <div class="flex items-center justify-end">
+          <RowActions :items="rowActions(row)" />
+        </div>
+      </template>
     </DataTable>
+
+    <RunImageDialog
+      v-if="runTarget"
+      v-model:open="runOpen"
+      :image-ref="imageRef(runTarget) ?? runTarget.Id"
+      @started="execute()"
+    />
+
+    <ConfirmDialog
+      v-if="deleteTarget || bulkDelete"
+      v-model:open="deleteOpen"
+      title="Delete image?"
+      :description="deleteDescription"
+      confirm-label="Delete"
+      :loading="deleteLoading"
+      :error="deleteError"
+      @confirm="confirmDelete"
+    />
   </div>
 </template>
