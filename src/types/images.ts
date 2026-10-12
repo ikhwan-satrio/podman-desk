@@ -42,3 +42,19 @@ export type ImageHistoryItem = {
   Size?: number;
   Comment?: string;
 };
+
+export type FsNode = {
+  name: string;
+  path: string;
+  type: "dir" | "file" | "symlink" | "other";
+  size: number;
+  link?: string;
+  children?: FsNode[];
+};
+
+export type ImageFs = {
+  root: FsNode;
+  file_count: number;
+  dir_count: number;
+  truncated: boolean;
+};

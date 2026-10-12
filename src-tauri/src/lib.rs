@@ -107,6 +107,12 @@ async fn get_image_history(id: String) -> Result<Value, String> {
 }
 
 #[tauri::command]
+async fn get_image_filesystem(id: String) -> Result<utils::image_fs::ImageFs, String> {
+    let dock = connect_docker().await?;
+    utils::image_fs::read_image_fs(&dock, &id).await
+}
+
+#[tauri::command]
 async fn get_volumes() -> Result<Option<Vec<Volume>>, String> {
     let dock = connect_docker().await?;
     let opt = ListVolumesOptionsBuilder::default().build();
@@ -166,6 +172,7 @@ pub fn run() {
             get_images,
             get_image,
             get_image_history,
+            get_image_filesystem,
             get_volumes,
             get_networks,
             get_pods,

@@ -1,13 +1,14 @@
 <script setup lang="ts">
-import { computed, ref } from "vue";
+import { computed, ref, watch } from "vue";
 import { useRoute } from "vue-router";
 import { invoke } from "@tauri-apps/api/core";
 import { useAsyncState } from "@vueuse/core";
 import PageHeader from "@components/PageHeader.vue";
 import EmptyState from "@components/EmptyState.vue";
+import FsTreeNode from "@components/FsTreeNode.vue";
 import { useFormat } from "@/composables/useFormat";
 import { useLiveRefresh } from "@/composables/usePodmanEvents";
-import type { ImageHistoryItem, ImageInspect } from "@/types/images";
+import type { FsNode, ImageFs, ImageHistoryItem, ImageInspect } from "@/types/images";
 
 const route = useRoute("/images/[id]");
 const id = computed(() => String(route.params.id));
@@ -41,6 +42,32 @@ const tabs: { id: TabId; label: string }[] = [
   { id: "filesystem", label: "Filesystem" },
 ];
 const activeTab = ref<TabId>("info");
+
+// Filesystem tree di-load on-demand saat tab dibuka (export tar cukup berat).
+const {
+  state: fsTree,
+  error: fsError,
+  isLoading: fsLoading,
+  execute: executeFs,
+} = useAsyncState<ImageFs | null>(
+  () => invoke<ImageFs>("get_image_filesystem", { id: id.value }),
+  null,
+  { immediate: false },
+);
+
+let fsRequested = false;
+watch(activeTab, (tab) => {
+  if (tab === "filesystem" && !fsRequested) {
+    fsRequested = true;
+    void executeFs();
+  }
+});
+
+const selectedNode = ref<FsNode | null>(null);
+
+const onSelect = (node: FsNode) => {
+  selectedNode.value = node;
+};
 
 const title = computed(() => {
   const tag = image.value?.RepoTags?.find((item) => item && !item.startsWith("<none>"));
@@ -303,6 +330,77 @@ const layerCommand = (createdBy: string | undefined) => {
         role="tabpanel"
         class="mt-6 space-y-6"
       >
+        <section>
+          <div class="flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <h2 class="text-sm font-semibold text-zinc-900 dark:text-zinc-100">
+                Filesystem
+              </h2>
+              <p
+                v-if="fsTree"
+                class="mt-1 text-xs text-zinc-500 dark:text-zinc-400"
+              >
+                {{ fsTree.dir_count }} folders · {{ fsTree.file_count }} files
+                <span v-if="fsTree.truncated" class="text-amber-600 dark:text-amber-400">
+                  · terpotong (batas {{ 30000 }} entri)
+                </span>
+              </p>
+            </div>
+            <button
+              type="button"
+              class="rounded-md border border-zinc-200 px-2.5 py-1 text-xs font-medium text-zinc-600 transition-colors hover:bg-zinc-50 hover:text-zinc-900 dark:border-zinc-700 dark:text-zinc-400 dark:hover:bg-zinc-800 dark:hover:text-zinc-100 disabled:opacity-50"
+              :disabled="fsLoading"
+              @click="void executeFs()"
+            >
+              {{ fsLoading ? "Reading…" : "Refresh" }}
+            </button>
+          </div>
+
+          <div
+            v-if="fsLoading && !fsTree"
+            class="mt-3 rounded-xl border border-zinc-200 bg-white px-4 py-6 text-center text-sm text-zinc-500 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-400"
+          >
+            Membaca filesystem image… (container sementara dibuat lalu di-export)
+          </div>
+
+          <div
+            v-else-if="fsError"
+            class="mt-3 rounded-xl border border-zinc-200 bg-white px-4 py-6 text-center text-sm text-zinc-500 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-400"
+          >
+            {{ fsError }}
+          </div>
+
+          <div
+            v-else-if="fsTree"
+            class="mt-3 overflow-hidden rounded-xl border border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-900"
+          >
+            <div class="max-h-[32rem] overflow-y-auto py-1">
+              <FsTreeNode
+                :node="fsTree.root"
+                :depth="0"
+                @select="onSelect"
+              />
+            </div>
+
+            <div
+              class="flex items-center gap-3 border-t border-zinc-200 bg-zinc-50 px-3 py-1.5 text-xs text-zinc-500 dark:border-zinc-800 dark:bg-zinc-900/60 dark:text-zinc-400"
+            >
+              <span v-if="selectedNode" class="min-w-0 truncate font-mono">
+                {{ selectedNode.path }}
+              </span>
+              <span v-else class="text-zinc-400 dark:text-zinc-500">
+                Klik file/folder untuk melihat path
+              </span>
+              <span
+                v-if="selectedNode && selectedNode.type !== 'dir'"
+                class="ml-auto shrink-0 tabular-nums"
+              >
+                {{ formatSize(selectedNode.size) }}
+              </span>
+            </div>
+          </div>
+        </section>
+
         <section>
           <h2 class="text-sm font-semibold text-zinc-900 dark:text-zinc-100">
             Layers

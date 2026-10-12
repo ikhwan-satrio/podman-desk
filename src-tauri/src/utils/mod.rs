@@ -1,4 +1,5 @@
 pub mod docker;
+pub mod image_fs;
 
 #[cfg(unix)]
 pub mod events;
